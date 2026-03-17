@@ -1,36 +1,133 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Church Planning Hub
 
-## Getting Started
+Aplicación de planificación y coordinación para una iglesia, construida con `Next.js`, `NextAuth`, `Prisma` y `PostgreSQL`.
 
-First, run the development server:
+## Stack recomendado para producción
+
+- App: `Vercel`
+- Base de datos: `Supabase Postgres`
+- Backups de la app: `Supabase Storage` en bucket privado
+
+## Variables de entorno
+
+Tomá como base [`.env.example`](/Users/damian/Documents/Dev/church-planning-hub/.env.example).
+
+### Base de datos
+
+- `DATABASE_URL`
+  - URL del pooler de Supabase para el runtime de la app.
+- `DIRECT_URL`
+  - URL directa de Supabase para migraciones Prisma.
+
+### Auth
+
+- `NEXTAUTH_URL`
+  - URL pública de la app. En local: `http://localhost:3000`.
+- `NEXTAUTH_SECRET`
+  - Generala con `openssl rand -base64 32`.
+- `SKIP_AUTH`
+  - Dejalo en `false`. Solo sirve para desarrollo controlado.
+
+### Backups
+
+- `BACKUP_STORAGE`
+  - `local` en desarrollo local.
+  - `supabase` en Vercel.
+- `SUPABASE_URL`
+  - URL del proyecto de Supabase.
+- `SUPABASE_SERVICE_ROLE_KEY`
+  - Service role key del proyecto. Solo servidor.
+- `SUPABASE_BACKUP_BUCKET`
+  - Nombre del bucket privado para backups. Recomendado: `backups`.
+
+## Desarrollo local
+
+1. Instalá dependencias:
+
+```bash
+npm install
+```
+
+2. Configurá `.env` a partir de `.env.example`.
+
+3. Generá Prisma y corré migraciones:
+
+```bash
+npm run prisma:generate
+npm run db:migrate
+```
+
+4. Seed opcional:
+
+```bash
+npm run db:seed
+```
+
+5. Levantá la app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Preparación para Vercel + Supabase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 1. Crear la base en Supabase
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Creá un proyecto nuevo en Supabase.
+- Copiá:
+  - la URL del pooler para `DATABASE_URL`
+  - la conexión directa para `DIRECT_URL`
+- Corré las migraciones contra esa base:
 
-## Learn More
+```bash
+npm run db:deploy
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 2. Crear bucket privado para backups
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- En Supabase Storage, creá un bucket privado llamado `backups`.
+- Cargá en Vercel:
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `SUPABASE_BACKUP_BUCKET=backups`
+  - `BACKUP_STORAGE=supabase`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. Configurar Vercel
 
-## Deploy on Vercel
+- Importá el repo en Vercel.
+- Definí estas variables:
+  - `DATABASE_URL`
+  - `DIRECT_URL`
+  - `NEXTAUTH_URL`
+  - `NEXTAUTH_SECRET`
+  - `BACKUP_STORAGE`
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `SUPABASE_BACKUP_BUCKET`
+  - `SKIP_AUTH=false`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+La app ya está preparada para:
+- generar Prisma en build con `npm run build`
+- usar `DATABASE_URL` para runtime
+- usar `DIRECT_URL` para migraciones
+- guardar backups fuera del filesystem local cuando `BACKUP_STORAGE=supabase`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts útiles
+
+- `npm run dev`
+- `npm run build`
+- `npm run start`
+- `npm run lint`
+- `npm run test`
+- `npm run prisma:generate`
+- `npm run db:migrate`
+- `npm run db:deploy`
+- `npm run db:seed`
+
+## Validación recomendada antes de subir
+
+```bash
+npm run lint
+npm run test
+npm run build
+```

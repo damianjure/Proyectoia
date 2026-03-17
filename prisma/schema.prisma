@@ -1,0 +1,479 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== ENUMS ====================
+
+enum Role {
+  ADMIN
+  RESPONSABLE
+  COLABORADOR
+  INVITADO
+}
+
+enum ServiceStatus {
+  DRAFT
+  PUBLISHED
+  COMPLETED
+  CANCELLED
+}
+
+enum ServiceType {
+  REGULAR
+  SANTA_CENA
+  ESPECIAL
+}
+
+enum ChannelType {
+  TEAM
+  GENERAL
+  DIRECT
+  BROADCAST
+}
+
+enum MessageType {
+  TEXT
+  SYSTEM
+  FILE
+}
+
+enum AssignmentStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  SUBSTITUTE
+}
+
+enum TaskStatus {
+  PENDING
+  OPENED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum EventType {
+  SERVICE
+  REHEARSAL
+  SPECIAL
+}
+
+enum BackupTrigger {
+  LOGIN_ADMIN
+  LOGIN_RESPONSABLE
+  MANUAL
+}
+
+// ==================== MODELS ====================
+
+model Church {
+  id       String @id @default(cuid())
+  name     String
+  address  String?
+  logoUrl  String?
+  timezone String @default("America/Argentina/Buenos_Aires")
+  language String @default("es")
+  plan     String @default("free")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  teams              Team[]
+  services           Service[]
+  channels           Channel[]
+  tags               Tag[]
+  calendarEvents     CalendarEvent[]
+  activityLogs       ActivityLog[]
+  backups            Backup[]
+  permissionProfiles PermissionProfile[]
+
+  @@map("churches")
+}
+
+model User {
+  id       String  @id @default(cuid())
+  churchId String
+  name     String
+  email    String  @unique
+  phone    String?
+  birthday DateTime?
+  address  String?
+  role     Role    @default(INVITADO)
+  avatar   String?
+  password String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  church              Church               @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  teamMembers         TeamMember[]
+  userTags            UserTag[]
+  sentMessages        Message[]
+  channelMemberships  ChannelMember[]
+  serviceAssignments  ServiceAssignment[]
+  responsibleTasks    ResponsibleTask[]
+  permissionOverrides PermissionOverride[]
+  activityLogs        ActivityLog[]
+  notifications       Notification[]
+  triggeredBackups    Backup[]
+  accounts            Account[]
+
+  @@index([churchId])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Team {
+  id       String  @id @default(cuid())
+  churchId String
+  name     String
+  color    String  @default("#3B82F6")
+  leaderId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  church             Church              @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  members            TeamMember[]
+  channels           Channel[]
+  serviceAssignments ServiceAssignment[]
+  responsibleTasks   ResponsibleTask[]
+
+  @@index([churchId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String  @id @default(cuid())
+  teamId   String
+  userId   String
+  position String?
+  isLeader Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model Service {
+  id         String        @id @default(cuid())
+  churchId   String
+  date       DateTime
+  time       String
+  type       ServiceType   @default(REGULAR)
+  status     ServiceStatus @default(DRAFT)
+  templateId String?
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  church      Church              @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  items       ServiceItem[]
+  assignments ServiceAssignment[]
+  tasks       ResponsibleTask[]
+  events      CalendarEvent[]
+
+  @@index([churchId, date])
+  @@map("services")
+}
+
+model ServiceItem {
+  id        String  @id @default(cuid())
+  serviceId String
+  parentId  String?
+  order     Int
+  title     String
+  duration  Int?     // minutes
+  type      String   @default("general") // alabanza, predicacion, oracion, anuncios, etc.
+  color     String?
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  service  Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  parent   ServiceItem?  @relation("SubItems", fields: [parentId], references: [id], onDelete: Cascade)
+  children ServiceItem[] @relation("SubItems")
+  songs    SongSubItem[]
+
+  @@index([serviceId])
+  @@index([parentId])
+  @@map("service_items")
+}
+
+model SongSubItem {
+  id            String  @id @default(cuid())
+  serviceItemId String
+  order         Int
+  songName      String
+  artist        String?
+  key           String?
+  notes         String?
+
+  createdAt DateTime @default(now())
+
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id], onDelete: Cascade)
+
+  @@index([serviceItemId])
+  @@map("song_sub_items")
+}
+
+model ServiceAssignment {
+  id        String           @id @default(cuid())
+  serviceId String
+  teamId    String
+  userId    String
+  position  String?
+  status    AssignmentStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, teamId, userId])
+  @@index([userId])
+  @@map("service_assignments")
+}
+
+model Tag {
+  id          String    @id @default(cuid())
+  churchId    String
+  name        String
+  color       String    @default("#6B7280")
+  isTemporary Boolean   @default(false)
+  expiresAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  church   Church    @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  userTags UserTag[]
+
+  @@index([churchId])
+  @@map("tags")
+}
+
+model UserTag {
+  id     String @id @default(cuid())
+  userId String
+  tagId  String
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tagId])
+  @@map("user_tags")
+}
+
+model Channel {
+  id       String      @id @default(cuid())
+  churchId String
+  name     String
+  type     ChannelType
+  teamId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  church   Church          @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  team     Team?           @relation(fields: [teamId], references: [id])
+  messages Message[]
+  members  ChannelMember[]
+
+  @@index([churchId])
+  @@map("channels")
+}
+
+model ChannelMember {
+  id         String   @id @default(cuid())
+  channelId  String
+  userId     String
+  lastReadAt DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+  @@map("channel_members")
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  channelId String
+  senderId  String
+  content   String
+  type      MessageType @default(TEXT)
+  isPinned  Boolean     @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender  User    @relation(fields: [senderId], references: [id])
+
+  @@index([channelId, createdAt])
+  @@map("messages")
+}
+
+model PermissionOverride {
+  id            String  @id @default(cuid())
+  userId        String
+  permissionKey String
+  value         Boolean
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionKey])
+  @@index([userId])
+  @@map("permission_overrides")
+}
+
+model PermissionProfile {
+  id              String @id @default(cuid())
+  churchId        String
+  name            String
+  permissionsJson String // JSON string of permission overrides
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@index([churchId])
+  @@map("permission_profiles")
+}
+
+model ActivityLog {
+  id       String @id @default(cuid())
+  churchId String
+  userId   String
+  action   String
+  section  String
+  detail   String?
+  ip       String?
+  device   String?
+
+  createdAt DateTime @default(now())
+
+  church Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([churchId, createdAt])
+  @@index([userId])
+  @@map("activity_logs")
+}
+
+model Backup {
+  id          String        @id @default(cuid())
+  churchId    String
+  triggerType BackupTrigger
+  triggeredBy String
+  sizeBytes   Int?
+  storageUrl  String?
+
+  createdAt DateTime @default(now())
+
+  church    Church @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  triggerer User   @relation(fields: [triggeredBy], references: [id])
+
+  @@index([churchId, createdAt])
+  @@map("backups")
+}
+
+model CalendarEvent {
+  id         String    @id @default(cuid())
+  churchId   String
+  serviceId  String?
+  title      String
+  date       DateTime
+  time       String?
+  endDate    DateTime?
+  type       EventType @default(SERVICE)
+  externalId String?   // Google Calendar, Outlook, etc.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  church  Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id])
+
+  @@index([churchId, date])
+  @@map("calendar_events")
+}
+
+model Notification {
+  id        String  @id @default(cuid())
+  userId    String
+  type      String
+  content   String
+  read      Boolean @default(false)
+  actionUrl String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@map("notifications")
+}
+
+model ResponsibleTask {
+  id            String     @id @default(cuid())
+  serviceId     String
+  teamId        String
+  responsibleId String
+  status        TaskStatus @default(PENDING)
+  openedAt      DateTime?
+  completedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  service     Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  team        Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  responsible User    @relation(fields: [responsibleId], references: [id])
+
+  @@unique([serviceId, teamId])
+  @@index([responsibleId])
+  @@map("responsible_tasks")
+}
+
+// ==================== OAUTH ACCOUNTS ====================
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
