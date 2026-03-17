@@ -45,7 +45,7 @@ function getInitialState(item: FlowItem | null) {
       title: item.title,
       duration: item.duration,
       notes: item.notes ?? "",
-      responsible: "",
+      responsible: item.responsible ?? "",
       subItems: item.subItems ?? [],
     }
   }
@@ -103,6 +103,7 @@ export function BlockEditorDialog({
       color: blockType.color,
       notes,
       subItems,
+      responsible: responsible || undefined,
     }
     onSave(saved)
     onOpenChange(false)

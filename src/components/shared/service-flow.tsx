@@ -50,6 +50,7 @@ export interface FlowItem {
   color: string
   notes: string
   subItems: SubItem[]
+  responsible?: string
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -135,12 +136,19 @@ function SortableFlowItem({
           )}
         </button>
 
-        <Input
-          value={item.title}
-          onChange={(e) => onUpdate(item.id, { title: e.target.value })}
-          className="flex-1 border-0 bg-transparent px-1 font-medium shadow-none focus-visible:ring-0"
-          placeholder="Nombre del bloque"
-        />
+        <div className="flex flex-1 flex-col min-w-0">
+          <Input
+            value={item.title}
+            onChange={(e) => onUpdate(item.id, { title: e.target.value })}
+            className="border-0 bg-transparent px-1 font-medium shadow-none focus-visible:ring-0 h-7"
+            placeholder="Nombre del bloque"
+          />
+          {item.responsible && (
+            <span className="px-1 text-xs text-muted-foreground truncate">
+              👤 {item.responsible}
+            </span>
+          )}
+        </div>
 
         <div className="flex items-center gap-1 text-sm text-muted-foreground">
           <Clock className="h-3 w-3" />
@@ -390,13 +398,6 @@ export function ServiceFlow({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Duración total: {totalDuration} min (
-          {Math.floor(totalDuration / 60)}h {totalDuration % 60}m)
-        </p>
-      </div>
-
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -429,6 +430,21 @@ export function ServiceFlow({
         <Plus className="h-4 w-4 mr-2" />
         Agregar bloque
       </Button>
+
+      {items.length > 0 && (
+        <div className="flex items-center justify-end rounded-lg border bg-muted/40 px-4 py-2">
+          <div className="flex items-center gap-2 text-sm">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Duración total:</span>
+            <span className="font-semibold">
+              {totalDuration >= 60
+                ? `${Math.floor(totalDuration / 60)}h ${totalDuration % 60 > 0 ? `${totalDuration % 60}m` : ""}`
+                : `${totalDuration} min`}
+            </span>
+            <span className="text-xs text-muted-foreground">({totalDuration} min)</span>
+          </div>
+        </div>
+      )}
 
       <BlockEditorDialog
         key={`${dialogOpen ? "open" : "closed"}-${editingItem?.id ?? "new"}`}

@@ -23,6 +23,8 @@ import { Separator } from "@/components/ui/separator"
 import { createService, updateService } from "@/lib/actions/services"
 import {
   Calendar,
+  ChevronDown,
+  ChevronRight,
   Clock3,
   FileText,
   Music,
@@ -30,6 +32,7 @@ import {
   Printer,
   Save,
   Send,
+  Users,
 } from "lucide-react"
 
 interface ServiceItemPreview {
@@ -108,8 +111,14 @@ export default function ServicesClient({
 }: ServicesClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [pastOpen, setPastOpen] = useState(false)
+
+  const today = new Date().toISOString().split("T")[0]
+  const upcomingServices = services.filter((s) => s.date >= today)
+  const pastServices = services.filter((s) => s.date < today).reverse()
+
   const [selectedId, setSelectedId] = useState<string | null>(
-    services[0]?.id ?? null
+    upcomingServices[0]?.id ?? services[0]?.id ?? null
   )
   const [form, setForm] = useState<ServiceFormState>(() => {
     const selected = services[0]
@@ -226,17 +235,74 @@ export default function ServicesClient({
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         <div className="space-y-3">
+          {/* Servicios anteriores */}
+          {pastServices.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2 pt-3">
+                <button
+                  onClick={() => setPastOpen((v) => !v)}
+                  className="flex w-full items-center justify-between text-left"
+                >
+                  <CardTitle className="text-sm text-muted-foreground">
+                    Servicios anteriores ({pastServices.length})
+                  </CardTitle>
+                  {pastOpen ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+              </CardHeader>
+              {pastOpen && (
+                <CardContent className="space-y-2 pt-0">
+                  {pastServices.map((service) => (
+                    <button
+                      key={service.id}
+                      onClick={() => handleSelectService(service)}
+                      className={`w-full rounded-lg border p-3 text-left transition-colors opacity-70 ${
+                        selectedId === service.id
+                          ? "border-primary bg-primary/5 opacity-100"
+                          : "hover:bg-accent hover:opacity-100"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">
+                            {new Date(service.date).toLocaleDateString("es-AR", {
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                            })}
+                          </span>
+                        </div>
+                        <Badge variant={STATUS_VARIANTS[service.status] ?? "secondary"}>
+                          {STATUS_LABELS[service.status] ?? service.status}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {service.time} · {service.type} · {service.confirmed}/
+                        {service.required} confirmados
+                      </div>
+                    </button>
+                  ))}
+                </CardContent>
+              )}
+            </Card>
+          )}
+
+          {/* Próximos servicios */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">Próximos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pt-0">
-              {services.length === 0 ? (
+              {upcomingServices.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
                   No hay servicios próximos.
                 </p>
               ) : (
-                services.map((service) => (
+                upcomingServices.map((service) => (
                   <button
                     key={service.id}
                     onClick={() => handleSelectService(service)}
@@ -435,15 +501,82 @@ export default function ServicesClient({
 
                 <Separator />
 
-                <div className="space-y-2">
-                  <Label>Notas del servicio</Label>
-                  <textarea
-                    value={form.notes}
-                    disabled={!canEdit || isPending}
-                    onChange={(event) => updateForm("notes", event.target.value)}
-                    className="min-h-[100px] w-full rounded-md border bg-background px-3 py-2 text-sm disabled:opacity-60"
-                    placeholder="Notas para el equipo..."
-                  />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Notas del servicio</Label>
+                    <textarea
+                      value={form.notes}
+                      disabled={!canEdit || isPending}
+                      onChange={(event) => updateForm("notes", event.target.value)}
+                      className="min-h-[100px] w-full rounded-md border bg-background px-3 py-2 text-sm disabled:opacity-60"
+                      placeholder="Notas para el equipo..."
+                    />
+                  </div>
+
+                  {/* Caja de gente */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" />
+                      Equipo del servicio
+                    </Label>
+                    <div className="rounded-lg border bg-background p-4 space-y-4 min-h-[100px]">
+                      {selected.required === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center pt-4">
+                          Sin asignaciones todavía.
+                        </p>
+                      ) : (
+                        <>
+                          {/* Confirmados */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-1.5">
+                                <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
+                                Confirmados
+                              </span>
+                              <span className="font-semibold text-green-600">
+                                {selected.confirmed}/{selected.required}
+                              </span>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-green-500 transition-all"
+                                style={{
+                                  width: `${selected.required > 0 ? Math.round((selected.confirmed / selected.required) * 100) : 0}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Pendientes */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-1.5">
+                                <span className="h-2 w-2 rounded-full bg-amber-400 inline-block" />
+                                Por confirmar
+                              </span>
+                              <span className="font-semibold text-amber-600">
+                                {selected.required - selected.confirmed}/{selected.required}
+                              </span>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-amber-400 transition-all"
+                                style={{
+                                  width: `${selected.required > 0 ? Math.round(((selected.required - selected.confirmed) / selected.required) * 100) : 0}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground text-center">
+                            {selected.required > 0
+                              ? `${Math.round((selected.confirmed / selected.required) * 100)}% del equipo confirmado`
+                              : ""}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </>
